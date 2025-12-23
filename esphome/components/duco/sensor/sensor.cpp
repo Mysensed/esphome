@@ -35,7 +35,7 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
   //   this->parent_->stop_waiting(message.id);
   // }
 
-  ESP_LOGD("duco_custom", "RX: Func=%02X, Byte0=%02X, Byte1=%02X, Byte2=%02X", message.function, message.data[0], message.data[1], message.data[2]);
+  // ESP_LOGD("duco_custom", "RX: Func=%02X, Byte0=%02X, Byte1=%02X, Byte2=%02X", message.function, message.data[0], message.data[1], message.data[2]);
   //ORIGINAL CODE
   if (message.function == 0x12) {
     uint16_t co2_value = (message.data[5] << 8) + message.data[4];
