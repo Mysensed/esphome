@@ -116,7 +116,7 @@ void Duco::finalize_message_() {
     ESP_LOGD(TAG, "Delivering response id=0x%02X to waiting device", message.id);
     waiting_for_response[message.id]->receive_response(message);
   } else {
-    ESP_LOGD(TAG, "No waiting device for response id=0x%02X", message.id);
+    ESP_LOGD(TAG, "No, waiting device for response id=0x%02X", message.id);
   }
 }
 
