@@ -113,10 +113,10 @@ void Duco::finalize_message_() {
   // see if a component is waiting for a response
   auto it = waiting_for_response.find(message.id);
   if (it != waiting_for_response.end()) {
-    ESP_LOGD(TAG, "Delivering response id=0x%02X to waiting device", message.id);
+    // ESP_LOGD(TAG, "Delivering response id=0x%02X to waiting device", message.id);
     waiting_for_response[message.id]->receive_response(message);
   } else {
-    ESP_LOGD(TAG, "No waiting device for response id=0x%02X", message.id);
+    // ESP_LOGD(TAG, "No waiting device for response id=0x%02X", message.id);
   }
 }
 
