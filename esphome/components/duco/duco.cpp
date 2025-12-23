@@ -85,6 +85,9 @@ bool Duco::parse_byte_(uint8_t byte) {
 void Duco::finalize_message_() {
   if (this->rx_buffer_.empty())
     return;
+
+  ESP_LOGD(TAG, "Duco message received (%d bytes): %s",this->rx_buffer_.size(),format_hex_pretty(this->rx_buffer_).c_str());
+  
   const uint8_t *raw = &this->rx_buffer_[0];
 
   uint8_t data_len = raw[0];
@@ -105,11 +108,15 @@ void Duco::finalize_message_() {
   message.function = this->rx_buffer_[1];
   message.id = this->rx_buffer_[2];
   message.data.insert(message.data.end(), this->rx_buffer_.begin() + 3, this->rx_buffer_.begin() + data_len + 1);
+  ESP_LOGD(TAG, "Parsed message: function=0x%02X id=0x%02X data=%s",message.function,message.id,format_hex_pretty(message.data).c_str());
 
   // see if a component is waiting for a response
   auto it = waiting_for_response.find(message.id);
   if (it != waiting_for_response.end()) {
+    ESP_LOGD(TAG, "Delivering response id=0x%02X to waiting device", message.id);
     waiting_for_response[message.id]->receive_response(message);
+  } else {
+    ESP_LOGD(TAG, "No waiting device for response id=0x%02X", message.id);
   }
 }
 
