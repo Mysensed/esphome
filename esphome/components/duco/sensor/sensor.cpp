@@ -22,9 +22,11 @@ float DucoCo2Sensor::get_setup_priority() const {
 }
 
 void DucoCo2Sensor::receive_response(const DucoMessage &message) {
-  ESP_LOGD("duco_custom", "RX: Func=%02X, Byte0=%02X, Byte1=%02X, Byte2=%02X", message.function, message.data[0], message.data[1], message.data[2]);
   //ORIGINAL CODE
   if (message.function == 0x12) {
+    //ADD LOGING
+    ESP_LOGD("Co2 debug", "RX: Func=%02X, Byte0=%02X, Byte1=%02X, Byte2=%02X", message.function, message.data[0], message.data[1], message.data[2]);
+    
     uint16_t co2_value = (message.data[5] << 8) + message.data[4];
     // only publish the state if the co2 value is below 10000 or above 300
     // otherwise the value is likely invalid
