@@ -22,29 +22,30 @@ float DucoCo2Sensor::get_setup_priority() const {
 }
 
 void DucoCo2Sensor::receive_response(const DucoMessage &message) {
-  // update check voor doorgegeven sensor waarde
-  // We voegen de check toe of het adres in het bericht (data[1]) 
-  // overeenkomt met het adres van deze sensor (this->address_)
-  if (message.function == 0x12 && message.data[1] == this->address_) {
-    uint16_t co2_value = (message.data[5] << 8) + message.data[4];
-    
-    if (co2_value <= 10000 && co2_value >= 300)
-      publish_state(co2_value);
-
-    // Belangrijk: stop_waiting nu binnen de if-match
-    this->parent_->stop_waiting(message.id);
-  }
-
-  //ORIGINAL CODE
-  // if (message.function == 0x12) {
+  // // update check voor doorgegeven sensor waarde
+  // // We voegen de check toe of het adres in het bericht (data[1]) 
+  // // overeenkomt met het adres van deze sensor (this->address_)
+  // if (message.function == 0x12 && message.data[1] == this->address_) {
   //   uint16_t co2_value = (message.data[5] << 8) + message.data[4];
-  //   // only publish the state if the co2 value is below 10000 or above 300
-  //   // otherwise the value is likely invalid
+    
   //   if (co2_value <= 10000 && co2_value >= 300)
   //     publish_state(co2_value);
 
+  //   // Belangrijk: stop_waiting nu binnen de if-match
   //   this->parent_->stop_waiting(message.id);
   // }
+
+  ESP_LOGD("duco_custom", "RX: Func=%02X, Byte0=%02X, Byte1=%02X, Byte2=%02X", message.function, message.data[0], message.data[1], message.data[2]);
+  //ORIGINAL CODE
+  if (message.function == 0x12) {
+    uint16_t co2_value = (message.data[5] << 8) + message.data[4];
+    // only publish the state if the co2 value is below 10000 or above 300
+    // otherwise the value is likely invalid
+    if (co2_value <= 10000 && co2_value >= 300)
+      publish_state(co2_value);
+
+    this->parent_->stop_waiting(message.id);
+  }
 }
 
 void DucoCo2Sensor::set_address(uint8_t address) { this->address_ = address; }
