@@ -35,7 +35,7 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
              message.data.size() > 6 ? message.data[6] : 0,
              message.data.size() > 7 ? message.data[7] : 0
     );
-    // ------------------------------
+    // ------- END DEBUG LINE ---------
     uint16_t co2_value = (message.data[5] << 8) + message.data[4];
     // only publish the state if the co2 value is below 10000 or above 300
     // otherwise the value is likely invalid
