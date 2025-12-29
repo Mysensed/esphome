@@ -50,101 +50,77 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
   if (message.function != 0x12)
     return;
 
-  uint32_t now = millis();
-
-  // ---- DEBUG: basic message info ----
-  ESP_LOGD("duco_co2",
-           "RX CO2 message: function=0x%02X id=0x%02X data_len=%d",
-           message.function,
-           message.id,
-           message.data.size());
-
-  // ---- DEBUG: dump raw data (max 16 bytes) ----
-  char hexbuf[3 * 16] = {0};
-  size_t pos = 0;
-  for (size_t i = 0; i < message.data.size() && i < 16; i++) {
-    pos += snprintf(hexbuf + pos, sizeof(hexbuf) - pos,
-                    "%02X%s",
-                    message.data[i],
-                    (i + 1 < message.data.size()) ? "." : "");
-  }
-  ESP_LOGD("duco_co2", "RX raw data: %s", hexbuf);
-
-  // ---- Sanity check ----
-  if (message.data.size() < 6) {
-    ESP_LOGW("duco_co2",
-             "CO2 message too short (len=%d), ignoring",
-             message.data.size());
+  if (message.data.size() < 6)
     return;
-  }
 
-  // ---- Decode CO2 ----
   uint16_t co2_value = (message.data[5] << 8) | message.data[4];
+  uint32_t now = millis();
+  uint8_t id = message.id;
 
-  ESP_LOGD("duco_co2",
-           "Decoded CO2: %u ppm (bytes %02X %02X)",
-           co2_value,
-           message.data[5],
-           message.data[4]);
+  // ---- per-sensor tracking ----
+  static uint16_t last_co2[256] = {0};
+  static uint32_t last_ms[256] = {0};
+  static uint8_t last_payload[256][16] = {{0}};
+  static uint8_t last_payload_len[256] = {0};
+  static uint32_t last_warn_ms[256] = {0};
 
-  // ============================================================
-  // DEBUG 1: duplicate CO2 values per message ID (rate-limited)
-  // ============================================================
-  static uint16_t last_co2_by_id[256] = {0};
-  static uint32_t last_seen_ms_by_id[256] = {0};
-  static uint32_t last_warn_ms_by_id[256] = {0};
-
-  if (last_co2_by_id[message.id] == co2_value) {
-    if (now - last_warn_ms_by_id[message.id] > 300000) { // 5 minutes
-      ESP_LOGW("duco_co2",
-               "Duplicate CO2 value %u ppm from id=0x%02X",
-               co2_value,
-               message.id);
-      last_warn_ms_by_id[message.id] = now;
-    }
-  }
-
-  last_co2_by_id[message.id] = co2_value;
-  last_seen_ms_by_id[message.id] = now;
-
-  // ============================================================
-  // DEBUG 2: implausible A/B interleaving jumps (rate-limited)
-  // ============================================================
-  static uint16_t last_co2_global = 0;
-  static uint32_t last_co2_global_ms = 0;
-  static uint32_t last_jump_warn_ms = 0;
-
-  if (last_co2_global != 0) {
-    uint32_t dt = now - last_co2_global_ms;
-    int diff = abs((int)co2_value - (int)last_co2_global);
+  // ---- detect implausible SAME-SENSOR jumps ----
+  if (last_co2[id] != 0) {
+    uint32_t dt = now - last_ms[id];
+    int diff = abs((int)co2_value - (int)last_co2[id]);
 
     if (dt < 60000 && diff > 300) {
-      if (now - last_jump_warn_ms > 300000) { // 5 minutes
-        ESP_LOGW("duco_co2",
-                 "Implausible CO2 jump: %u -> %u ppm in %lu ms (id=0x%02X)",
-                 last_co2_global,
-                 co2_value,
-                 (unsigned long)dt,
-                 message.id);
-        last_jump_warn_ms = now;
+      if (now - last_warn_ms[id] > 300000) {
+
+        ESP_LOGW(
+          "duco_co2",
+          "Implausible SAME-SENSOR CO2 jump on id=0x%02X: %u -> %u ppm in %lu ms\n"
+          "  prev_payload=%02X.%02X.%02X.%02X.%02X.%02X.%02X.%02X.%02X.%02X\n"
+          "  curr_payload=%02X.%02X.%02X.%02X.%02X.%02X.%02X.%02X.%02X.%02X",
+          id,
+          last_co2[id],
+          co2_value,
+          (unsigned long)dt,
+
+          // previous payload
+          last_payload[id][0], last_payload[id][1], last_payload[id][2], last_payload[id][3],
+          last_payload[id][4], last_payload[id][5], last_payload[id][6], last_payload[id][7],
+          last_payload[id][8], last_payload[id][9],
+
+          // current payload
+          message.data.size() > 0 ? message.data[0] : 0,
+          message.data.size() > 1 ? message.data[1] : 0,
+          message.data.size() > 2 ? message.data[2] : 0,
+          message.data.size() > 3 ? message.data[3] : 0,
+          message.data.size() > 4 ? message.data[4] : 0,
+          message.data.size() > 5 ? message.data[5] : 0,
+          message.data.size() > 6 ? message.data[6] : 0,
+          message.data.size() > 7 ? message.data[7] : 0,
+          message.data.size() > 8 ? message.data[8] : 0,
+          message.data.size() > 9 ? message.data[9] : 0
+        );
+
+        last_warn_ms[id] = now;
       }
     }
   }
 
-  last_co2_global = co2_value;
-  last_co2_global_ms = now;
+  // ---- store current message ----
+  last_co2[id] = co2_value;
+  last_ms[id] = now;
+  last_payload_len[id] = message.data.size();
+  for (size_t i = 0; i < message.data.size() && i < 16; i++) {
+    last_payload[id][i] = message.data[i];
+  }
 
-  // ---- Publish (unchanged behavior) ----
   if (co2_value >= 300 && co2_value <= 10000) {
     publish_state(co2_value);
-  } else {
-    ESP_LOGW("duco_co2",
-             "CO2 value %u ppm out of range, not published",
-             co2_value);
   }
 
   this->parent_->stop_waiting(message.id);
 }
+
+
 
 
 void DucoCo2Sensor::set_address(uint8_t address) { this->address_ = address; }
