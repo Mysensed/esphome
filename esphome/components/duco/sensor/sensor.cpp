@@ -54,8 +54,7 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
 
   // ---- DEBUG: basic message info ----
   ESP_LOGD("duco_co2",
-           "RX CO2 message: function=0x%02X id=0x%02X data_len=%d",
-           message.function,
+           "RX CO2 message: id=0x%02X data_len=%d",
            message.id,
            message.data.size());
 
@@ -73,8 +72,9 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
   // ---- Sanity check ----
   if (message.data.size() < 6) {
     ESP_LOGW("duco_co2",
-             "CO2 message too short (len=%d), ignoring",
-             message.data.size());
+             "CO2 message too short (len=%d) from id=0x%02X",
+             message.data.size(),
+             message.id);
     return;
   }
 
@@ -82,25 +82,34 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
   uint16_t co2_value = (message.data[5] << 8) | message.data[4];
 
   ESP_LOGD("duco_co2",
-           "Decoded CO2: %u ppm (bytes %02X %02X)",
+           "Decoded CO2: %u ppm (id=0x%02X)",
            co2_value,
-           message.data[5],
-           message.data[4]);
+           message.id);
 
   // ============================================================
-  // DEBUG 1: duplicate CO2 values per message ID (rate-limited)
+  // DEBUG STATE
   // ============================================================
   static uint16_t last_co2_by_id[256] = {0};
   static uint32_t last_seen_ms_by_id[256] = {0};
-  static uint32_t last_warn_ms_by_id[256] = {0};
+  static uint32_t last_dup_warn_ms_by_id[256] = {0};
 
+  static uint16_t last_co2_global = 0;
+  static uint8_t  last_id_global = 0;
+  static uint32_t last_global_ms = 0;
+
+  static uint32_t last_jump_warn_ms = 0;
+  static uint32_t last_forward_warn_ms = 0;
+
+  // ============================================================
+  // DEBUG 1: same-ID duplicate values (baseline / heartbeat)
+  // ============================================================
   if (last_co2_by_id[message.id] == co2_value) {
-    if (now - last_warn_ms_by_id[message.id] > 300000) { // 5 minutes
+    if (now - last_dup_warn_ms_by_id[message.id] > 300000) { // 5 min
       ESP_LOGW("duco_co2",
-               "Duplicate CO2 value %u ppm from id=0x%02X",
+               "Duplicate CO2 value %u ppm from same id=0x%02X",
                co2_value,
                message.id);
-      last_warn_ms_by_id[message.id] = now;
+      last_dup_warn_ms_by_id[message.id] = now;
     }
   }
 
@@ -108,43 +117,65 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
   last_seen_ms_by_id[message.id] = now;
 
   // ============================================================
-  // DEBUG 2: implausible A/B interleaving jumps (rate-limited)
+  // DEBUG 2: forwarded / proxied data detection (Case C)
+  // Same CO2 value from DIFFERENT IDs within short time
   // ============================================================
-  static uint16_t last_co2_global = 0;
-  static uint32_t last_co2_global_ms = 0;
-  static uint32_t last_jump_warn_ms = 0;
+  if (last_co2_global == co2_value &&
+      last_id_global != message.id &&
+      (now - last_global_ms) < 30000) {
 
+    if (now - last_forward_warn_ms > 300000) { // 5 min
+      ESP_LOGW("duco_co2",
+               "Possible forwarded CO2 value: %u ppm from id=0x%02X "
+               "(previously id=0x%02X, dt=%lu ms)",
+               co2_value,
+               message.id,
+               last_id_global,
+               (unsigned long)(now - last_global_ms));
+      last_forward_warn_ms = now;
+    }
+  }
+
+  // ============================================================
+  // DEBUG 3: implausible interleaving jumps (A/B switching)
+  // ============================================================
   if (last_co2_global != 0) {
-    uint32_t dt = now - last_co2_global_ms;
+    uint32_t dt = now - last_global_ms;
     int diff = abs((int)co2_value - (int)last_co2_global);
 
     if (dt < 60000 && diff > 300) {
-      if (now - last_jump_warn_ms > 300000) { // 5 minutes
+      if (now - last_jump_warn_ms > 300000) { // 5 min
         ESP_LOGW("duco_co2",
-                 "Implausible CO2 jump: %u -> %u ppm in %lu ms (id=0x%02X)",
+                 "Implausible CO2 jump: %u -> %u ppm in %lu ms "
+                 "(id=0x%02X, prev_id=0x%02X)",
                  last_co2_global,
                  co2_value,
                  (unsigned long)dt,
-                 message.id);
+                 message.id,
+                 last_id_global);
         last_jump_warn_ms = now;
       }
     }
   }
 
+  // ---- Update global history ----
   last_co2_global = co2_value;
-  last_co2_global_ms = now;
+  last_id_global = message.id;
+  last_global_ms = now;
 
-  // ---- Publish (unchanged behavior) ----
+  // ---- Publish (UNCHANGED behavior) ----
   if (co2_value >= 300 && co2_value <= 10000) {
     publish_state(co2_value);
   } else {
     ESP_LOGW("duco_co2",
-             "CO2 value %u ppm out of range, not published",
-             co2_value);
+             "CO2 value %u ppm out of range, not published (id=0x%02X)",
+             co2_value,
+             message.id);
   }
 
   this->parent_->stop_waiting(message.id);
 }
+
 
 
 void DucoCo2Sensor::set_address(uint8_t address) { this->address_ = address; }
