@@ -5,7 +5,6 @@
 namespace esphome {
 namespace duco {
 
-
 static const char *const TAG = "duco sensor";
 
 void DucoCo2Sensor::setup() {}
@@ -22,102 +21,77 @@ float DucoCo2Sensor::get_setup_priority() const {
   return setup_priority::BUS - 2.0f;
 }
 
-
-// DEBUG
+// STATIC GLOBALS:
 // Initialize static variables (place this in your .cpp file outside the function)
 uint16_t DucoCo2Sensor::global_last_value = 0;
 uint8_t DucoCo2Sensor::global_last_sensor_id = 0;
 uint32_t DucoCo2Sensor::last_dup_log_at_ = 0;
 
-
-// void DucoCo2Sensor::receive_response(const DucoMessage &message) {
-//   if (message.function == 0x12) {
-    
-//     uint16_t co2_value = (message.data[5] << 8) + message.data[4];
-//     // only publish the state if the co2 value is below 10000 or above 300
-//     // otherwise the value is likely invalid
-//     if (co2_value <= 10000 && co2_value >= 300)
-//       publish_state(co2_value);
-
-//     this->parent_->stop_waiting(message.id);
-//   }
-// }
-
-
+// Map sensor address to instance for routing forwarded data
+static DucoCo2Sensor* co2_sensor_map[256] = {nullptr};
 
 void DucoCo2Sensor::receive_response(const DucoMessage &message) {
   if (message.function == 0x12) {
-    
-    uint16_t co2_value = (message.data[5] << 8) + message.data[4]; //log co2 value
-    uint32_t now = millis(); //log current time
+    // Parse CO2 value from response
+    uint16_t co2_value = (message.data[5] << 8) + message.data[4];
+    // Identify which sensor address the data came from
+    uint8_t resp_addr = message.data[1];
+    uint32_t now = millis();
 
-    // //--- START DEBUG  ---
-    // // Create a "Hex Dump" of the raw data (bytes 0 to 7) to see the full packet
-    // char raw_data_str[30];
-    // snprintf(raw_data_str, sizeof(raw_data_str), "%02X %02X %02X %02X %02X %02X %02X %02X",
-    //          message.data[0], message.data[1], message.data[2], message.data[3],
-    //          message.data[4], message.data[5], message.data[6], message.data[7]);
+    // If the response address is different, route to the correct sensor
+    if (resp_addr != this->address_) {
+      DucoCo2Sensor* other = co2_sensor_map[resp_addr];
+      if (other) {
+        ESP_LOGW(TAG, "Forwarded CO2: %u ppm for sensor 0x%02X (via 0x%02X)", co2_value, resp_addr, this->address_);
+        // Publish on the correct sensor
+        if (co2_value <= 10000 && co2_value >= 300) {
+          other->publish_state(co2_value);
+        }
+        // Update history for the correct sensor and global
+        other->last_value_ = co2_value;
+        DucoCo2Sensor::global_last_value = co2_value;
+        DucoCo2Sensor::global_last_sensor_id = resp_addr;
+      } else {
+        ESP_LOGW(TAG, "Received CO2 for unknown sensor: 0x%02X", resp_addr);
+      }
+      // Stop waiting (for the sensor that sent us here) and exit
+      this->parent_->stop_waiting(message.id);
+      return;
+    }
 
-    // // --- DEBUG 1: JUMP DETECTION (Is it a swap?) ---
-    // if (this->last_value_ != 0 && abs(co2_value - this->last_value_) > 200) {
-    //   if (now - this->last_jump_log_at_ > 300000) {
-        
-    //     // Special check: Did we just jump to exactly what the OTHER sensor reported?
-    //     const char* type = (co2_value == global_last_value) ? "CROSS-TALK JUMP" : "SUDDEN JUMP";
-        
-    //     ESP_LOGW("DEBUG", "[%s] Sensor Addr: 0x%02X | Msg ID: 0x%02X | Val: %u | Raw: [%s]", 
-    //              type, this->address_, message.id, co2_value, raw_data_str);
-        
-    //     this->last_jump_log_at_ = now;
-    //   }
-    // }
+    //--- START DEBUG (as before) ---
+    // Create a "Hex Dump" of the raw data to see the full packet
+    char raw_data_str[30];
+    snprintf(raw_data_str, sizeof(raw_data_str), "%02X %02X %02X %02X %02X %02X %02X %02X",
+             message.data[0], message.data[1], message.data[2], message.data[3],
+             message.data[4], message.data[5], message.data[6], message.data[7]);
 
-    // // --- DEBUG 2: MIRRORING DETECTION ---
-    // if (co2_value == global_last_value && this->address_ != global_last_sensor_id) {
-    //   if (now - last_dup_log_at_ > 300000) {
-    //     ESP_LOGW("DEBUG", "[MIRRORING] Current Sensor Addr: 0x%02X | Msg ID: 0x%02X | Val: %u | Raw: [%s]", 
-    //              this->address_, message.id, co2_value, raw_data_str);
-    //     last_dup_log_at_ = now;
-    //   }
-    // }
+    // --- DEBUG 1: JUMP DETECTION (Is it a swap?) ---
+    if (this->last_value_ != 0 && abs(co2_value - this->last_value_) > 200) {
+      if (now - this->last_jump_log_at_ > 300000) {
+        // Special check: Did we just jump to exactly what the OTHER sensor reported?
+        const char* type = (co2_value == global_last_value) ? "CROSS-TALK JUMP" : "SUDDEN JUMP";
+        ESP_LOGW("DEBUG", "[%s] Sensor Addr: 0x%02X | Msg ID: 0x%02X | Val: %u | Raw: [%s]", 
+                 type, this->address_, message.id, co2_value, raw_data_str);
+        this->last_jump_log_at_ = now;
+      }
+    }
 
-    //--- DEBUG LOGS  ---
-    // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0x53 | Val: 751 | Raw: [01 04 F2 00 EF 02 00 00]
-    // duco_esp32_v3: [W][DEBUG:077]: [MIRRORING] Current Sensor Addr: 0x02 | Msg ID: 0xD4 | Val: 442 | Raw: [00 04 CA 00 BA 01 00 00]
-    // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xF3 | Val: 760 | Raw: [01 04 F2 00 F8 02 00 00]
-    // duco_esp32_v3: [W][DEBUG:077]: [MIRRORING] Current Sensor Addr: 0x02 | Msg ID: 0x71 | Val: 440 | Raw: [00 04 CA 00 B8 01 00 00]
-    // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xB1 | Val: 759 | Raw: [01 04 F2 00 F7 02 00 00]
-    // ----------------------
-    // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xA7 | Val: 737 | Raw: [01 04 F1 00 E1 02 00 00]
-    // duco_esp32_v3: [W][DEBUG:067]: [CROSS-TALK JUMP] Sensor Addr: 0x02 | Msg ID: 0x84 | Val: 430 | Raw: [00 04 CC 00 AE 01 00 00]
-    // duco_esp32_v3: [W][DEBUG:077]: [MIRRORING] Current Sensor Addr: 0x02 | Msg ID: 0x84 | Val: 430 | Raw: [00 04 CC 00 AE 01 00 00]
-    // duco_esp32_v3: [W][DEBUG:077]: [MIRRORING] Current Sensor Addr: 0x02 | Msg ID: 0x42 | Val: 427 | Raw: [00 04 CC 00 AB 01 00 00]
-    // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xA1 | Val: 746 | Raw: [01 04 F2 00 EA 02 00 00]
-    // //--- END DEBUG  ---
-
-    // //--- FIX part 1 (NOT WORKING, SENSORS UNAVAILABLE), ignore corrupt values
-    // // CHECK SOURCE ADDRESS (we have seen forwarded packages)
-    // // The first byte of the data is the Node ID.
-    // uint8_t source_node = message.data[0];
-    // // If this packet belongs to someone else, IGNORE it.
-    // if (source_node != this->address_) {
-    //    ESP_LOGW("DEBUG", "Ignored packet for Node 0x%02X (I am 0x%02X)", source_node, this->address_);
-       
-    //    // IMPORTANT: We must still tell the parent we are done waiting, 
-    //    // otherwise it might get stuck waiting for this ID.
-    //    this->parent_->stop_waiting(message.id); 
-    //    return;
-    // }
-    // //--- END FIX part 1
-
-    
+    // --- DEBUG 2: MIRRORING DETECTION ---
+    if (co2_value == global_last_value && this->address_ != global_last_sensor_id) {
+      if (now - last_dup_log_at_ > 300000) {
+        ESP_LOGW("DEBUG", "[MIRRORING] Current Sensor Addr: 0x%02X | Msg ID: 0x%02X | Val: %u | Raw: [%s]", 
+                 this->address_, message.id, co2_value, raw_data_str);
+        last_dup_log_at_ = now;
+      }
+    }
 
     // Update history
     this->last_value_ = co2_value;
     global_last_value = co2_value;
     global_last_sensor_id = this->address_;
 
-    // Original logic
+    // Original logic: publish state if in valid range
     if (co2_value <= 10000 && co2_value >= 300) {
       publish_state(co2_value);
     }
@@ -125,14 +99,10 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
   }
 }
 
-
-
-
-
-
-
-
-void DucoCo2Sensor::set_address(uint8_t address) { this->address_ = address; }
+void DucoCo2Sensor::set_address(uint8_t address) { 
+  this->address_ = address; 
+  co2_sensor_map[address] = this;
+}
 
 void DucoHumiditySensor::setup() {}
 
@@ -151,11 +121,8 @@ float DucoHumiditySensor::get_setup_priority() const {
 void DucoHumiditySensor::receive_response(const DucoMessage &message) {
   if (message.function == 0x12) {
     uint16_t rh_value = (message.data[7] << 8) + message.data[6];
-    // only publish the state if the co2 value is below 10000
-    // otherwise the value is likely invalid
     if (rh_value <= 10000)
       publish_state(rh_value / 100.0);
-
     this->parent_->stop_waiting(message.id);
   }
 }
@@ -179,11 +146,8 @@ float DucoTemperatureSensor::get_setup_priority() const {
 void DucoTemperatureSensor::receive_response(const DucoMessage &message) {
   if (message.function == 0x12) {
     uint16_t temp_value = (message.data[3] << 8) + message.data[2];
-    // only publish the state if the co2 value is below 10000
-    // otherwise the value is likely invalid
     if (temp_value <= 1000)
       publish_state(temp_value / 10.0);
-
     this->parent_->stop_waiting(message.id);
   }
 }
@@ -207,11 +171,8 @@ float DucoBoxTemperatureSensor::get_setup_priority() const {
 void DucoBoxTemperatureSensor::receive_response(const DucoMessage &message) {
   if (message.function == 0x26) {
     int16_t temp_value = (message.data[4] << 8) + message.data[3];
-    // only publish the state if the temperature value is reasonable
-    // otherwise the value is likely invalid
     if (temp_value <= 1000 && temp_value > -1000)
       publish_state(temp_value / 10.0);
-
     this->parent_->stop_waiting(message.id);
   }
 }
@@ -235,11 +196,8 @@ float DucoBypassSensor::get_setup_priority() const {
 void DucoBypassSensor::receive_response(const DucoMessage &message) {
   if (message.function == 0x26) {
     uint16_t bypass_value = message.data[3];
-    // only publish the state if the co2 value is below 10000
-    // otherwise the value is likely invalid
     if (bypass_value <= 100)
       publish_state(bypass_value);
-
     this->parent_->stop_waiting(message.id);
   }
 }
@@ -262,7 +220,6 @@ void DucoFilterRemainingSensor::receive_response(const DucoMessage &message) {
   if (message.function == 0x26) {
     uint8_t filter_remaining = message.data[3];
     publish_state(filter_remaining);
-
     this->parent_->stop_waiting(message.id);
   }
 }
@@ -285,7 +242,6 @@ void DucoFlowLevelSensor::receive_response(const DucoMessage &message) {
   if (message.function == 0x0e) {
     uint8_t flow_level = message.data[2];
     publish_state(flow_level);
-
     this->parent_->stop_waiting(message.id);
   }
 }
@@ -308,7 +264,6 @@ void DucoStateTimeRemainingSensor::receive_response(const DucoMessage &message) 
   if (message.function == 0x0e) {
     uint16_t time_remaining = (message.data[13] << 8) + message.data[12];
     publish_state(time_remaining);
-
     this->parent_->stop_waiting(message.id);
   }
 }
