@@ -2,15 +2,9 @@
 #include "../duco.h"
 #include <vector>
 
-// DEBUG
-// Initialize static variables (place this in your .cpp file outside the function)
-uint16_t DucoCo2Sensor::global_last_value = 0;
-uint8_t DucoCo2Sensor::global_last_sensor_id = 0;
-uint32_t DucoCo2Sensor::last_dup_log_at_ = 0;
-
-
 namespace esphome {
 namespace duco {
+
 
 static const char *const TAG = "duco sensor";
 
@@ -29,7 +23,11 @@ float DucoCo2Sensor::get_setup_priority() const {
 }
 
 
-
+// DEBUG
+// Initialize static variables (place this in your .cpp file outside the function)
+uint16_t DucoCo2Sensor::global_last_value = 0;
+uint8_t DucoCo2Sensor::global_last_sensor_id = 0;
+uint32_t DucoCo2Sensor::last_dup_log_at_ = 0;
 
 
 // void DucoCo2Sensor::receive_response(const DucoMessage &message) {
