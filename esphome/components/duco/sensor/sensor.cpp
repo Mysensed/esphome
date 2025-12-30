@@ -50,35 +50,36 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
     
     uint16_t co2_value = (message.data[5] << 8) + message.data[4]; //log co2 value
     uint32_t now = millis(); //log current time
-    
-    // Create a "Hex Dump" of the raw data (bytes 0 to 7) to see the full packet
-    char raw_data_str[30];
-    snprintf(raw_data_str, sizeof(raw_data_str), "%02X %02X %02X %02X %02X %02X %02X %02X",
-             message.data[0], message.data[1], message.data[2], message.data[3],
-             message.data[4], message.data[5], message.data[6], message.data[7]);
 
-    // --- DEBUG 1: JUMP DETECTION (Is it a swap?) ---
-    if (this->last_value_ != 0 && abs(co2_value - this->last_value_) > 200) {
-      if (now - this->last_jump_log_at_ > 300000) {
-        
-        // Special check: Did we just jump to exactly what the OTHER sensor reported?
-        const char* type = (co2_value == global_last_value) ? "CROSS-TALK JUMP" : "SUDDEN JUMP";
-        
-        ESP_LOGW("DEBUG", "[%s] Sensor Addr: 0x%02X | Msg ID: 0x%02X | Val: %u | Raw: [%s]", 
-                 type, this->address_, message.id, co2_value, raw_data_str);
-        
-        this->last_jump_log_at_ = now;
-      }
-    }
+    // //--- START DEBUG  ---
+    // // Create a "Hex Dump" of the raw data (bytes 0 to 7) to see the full packet
+    // char raw_data_str[30];
+    // snprintf(raw_data_str, sizeof(raw_data_str), "%02X %02X %02X %02X %02X %02X %02X %02X",
+    //          message.data[0], message.data[1], message.data[2], message.data[3],
+    //          message.data[4], message.data[5], message.data[6], message.data[7]);
 
-    // --- DEBUG 2: MIRRORING DETECTION ---
-    if (co2_value == global_last_value && this->address_ != global_last_sensor_id) {
-      if (now - last_dup_log_at_ > 300000) {
-        ESP_LOGW("DEBUG", "[MIRRORING] Current Sensor Addr: 0x%02X | Msg ID: 0x%02X | Val: %u | Raw: [%s]", 
-                 this->address_, message.id, co2_value, raw_data_str);
-        last_dup_log_at_ = now;
-      }
-    }
+    // // --- DEBUG 1: JUMP DETECTION (Is it a swap?) ---
+    // if (this->last_value_ != 0 && abs(co2_value - this->last_value_) > 200) {
+    //   if (now - this->last_jump_log_at_ > 300000) {
+        
+    //     // Special check: Did we just jump to exactly what the OTHER sensor reported?
+    //     const char* type = (co2_value == global_last_value) ? "CROSS-TALK JUMP" : "SUDDEN JUMP";
+        
+    //     ESP_LOGW("DEBUG", "[%s] Sensor Addr: 0x%02X | Msg ID: 0x%02X | Val: %u | Raw: [%s]", 
+    //              type, this->address_, message.id, co2_value, raw_data_str);
+        
+    //     this->last_jump_log_at_ = now;
+    //   }
+    // }
+
+    // // --- DEBUG 2: MIRRORING DETECTION ---
+    // if (co2_value == global_last_value && this->address_ != global_last_sensor_id) {
+    //   if (now - last_dup_log_at_ > 300000) {
+    //     ESP_LOGW("DEBUG", "[MIRRORING] Current Sensor Addr: 0x%02X | Msg ID: 0x%02X | Val: %u | Raw: [%s]", 
+    //              this->address_, message.id, co2_value, raw_data_str);
+    //     last_dup_log_at_ = now;
+    //   }
+    // }
 
     //--- DEBUG LOGS  ---
     // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0x53 | Val: 751 | Raw: [01 04 F2 00 EF 02 00 00]
@@ -86,7 +87,7 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
     // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xF3 | Val: 760 | Raw: [01 04 F2 00 F8 02 00 00]
     // duco_esp32_v3: [W][DEBUG:077]: [MIRRORING] Current Sensor Addr: 0x02 | Msg ID: 0x71 | Val: 440 | Raw: [00 04 CA 00 B8 01 00 00]
     // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xB1 | Val: 759 | Raw: [01 04 F2 00 F7 02 00 00]
-
+    // //--- END DEBUG  ---
 
     //--- FIX part 1, ignore corrupt values
     // CHECK SOURCE ADDRESS (we have seen forwarded packages)
