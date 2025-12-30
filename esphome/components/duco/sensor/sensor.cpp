@@ -2,6 +2,13 @@
 #include "../duco.h"
 #include <vector>
 
+// DEBUG
+// Initialize static variables (place this in your .cpp file outside the function)
+uint16_t DucoCo2Sensor::global_last_value = 0;
+uint8_t DucoCo2Sensor::global_last_sensor_id = 0;
+uint32_t DucoCo2Sensor::last_dup_log_at_ = 0;
+
+
 namespace esphome {
 namespace duco {
 
@@ -21,18 +28,79 @@ float DucoCo2Sensor::get_setup_priority() const {
   return setup_priority::BUS - 2.0f;
 }
 
+
+
+
+
+// void DucoCo2Sensor::receive_response(const DucoMessage &message) {
+//   if (message.function == 0x12) {
+    
+//     uint16_t co2_value = (message.data[5] << 8) + message.data[4];
+//     // only publish the state if the co2 value is below 10000 or above 300
+//     // otherwise the value is likely invalid
+//     if (co2_value <= 10000 && co2_value >= 300)
+//       publish_state(co2_value);
+
+//     this->parent_->stop_waiting(message.id);
+//   }
+// }
+
+
+
 void DucoCo2Sensor::receive_response(const DucoMessage &message) {
   if (message.function == 0x12) {
     
-    uint16_t co2_value = (message.data[5] << 8) + message.data[4];
-    // only publish the state if the co2 value is below 10000 or above 300
-    // otherwise the value is likely invalid
-    if (co2_value <= 10000 && co2_value >= 300)
-      publish_state(co2_value);
+    uint16_t co2_value = (message.data[5] << 8) + message.data[4]; //log co2 value
+    uint32_t now = millis(); //log current time
+    
+    // Create a "Hex Dump" of the raw data (bytes 0 to 7) to see the full packet
+    char raw_data_str[30];
+    snprintf(raw_data_str, sizeof(raw_data_str), "%02X %02X %02X %02X %02X %02X %02X %02X",
+             message.data[0], message.data[1], message.data[2], message.data[3],
+             message.data[4], message.data[5], message.data[6], message.data[7]);
 
+    // --- DEBUG 1: JUMP DETECTION (Is it a swap?) ---
+    if (this->last_value_ != 0 && abs(co2_value - this->last_value_) > 200) {
+      if (now - this->last_jump_log_at_ > 300000) {
+        
+        // Special check: Did we just jump to exactly what the OTHER sensor reported?
+        const char* type = (co2_value == global_last_value) ? "CROSS-TALK JUMP" : "SUDDEN JUMP";
+        
+        ESP_LOGW("DEBUG", "[%s] Sensor Addr: 0x%02X | Msg ID: 0x%02X | Val: %u | Raw: [%s]", 
+                 type, this->address_, message.id, co2_value, raw_data_str);
+        
+        this->last_jump_log_at_ = now;
+      }
+    }
+
+    // --- DEBUG 2: MIRRORING DETECTION ---
+    if (co2_value == global_last_value && this->address_ != global_last_sensor_id) {
+      if (now - last_dup_log_at_ > 300000) {
+        ESP_LOGW("DEBUG", "[MIRRORING] Current Sensor Addr: 0x%02X | Msg ID: 0x%02X | Val: %u | Raw: [%s]", 
+                 this->address_, message.id, co2_value, raw_data_str);
+        last_dup_log_at_ = now;
+      }
+    }
+
+    // Update history
+    this->last_value_ = co2_value;
+    global_last_value = co2_value;
+    global_last_sensor_id = this->address_;
+
+    // Original logic
+    if (co2_value <= 10000 && co2_value >= 300) {
+      publish_state(co2_value);
+    }
     this->parent_->stop_waiting(message.id);
   }
 }
+
+
+
+
+
+
+
 
 void DucoCo2Sensor::set_address(uint8_t address) { this->address_ = address; }
 
