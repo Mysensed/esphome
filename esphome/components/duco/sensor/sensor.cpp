@@ -95,20 +95,20 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
     // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xA1 | Val: 746 | Raw: [01 04 F2 00 EA 02 00 00]
     // //--- END DEBUG  ---
 
-    //--- FIX part 1, ignore corrupt values
-    // CHECK SOURCE ADDRESS (we have seen forwarded packages)
-    // The first byte of the data is the Node ID.
-    uint8_t source_node = message.data[0];
-    // If this packet belongs to someone else, IGNORE it.
-    if (source_node != this->address_) {
-       ESP_LOGW("DEBUG", "Ignored packet for Node 0x%02X (I am 0x%02X)", source_node, this->address_);
+    // //--- FIX part 1 (NOT WORKING, SENSORS UNAVAILABLE), ignore corrupt values
+    // // CHECK SOURCE ADDRESS (we have seen forwarded packages)
+    // // The first byte of the data is the Node ID.
+    // uint8_t source_node = message.data[0];
+    // // If this packet belongs to someone else, IGNORE it.
+    // if (source_node != this->address_) {
+    //    ESP_LOGW("DEBUG", "Ignored packet for Node 0x%02X (I am 0x%02X)", source_node, this->address_);
        
-       // IMPORTANT: We must still tell the parent we are done waiting, 
-       // otherwise it might get stuck waiting for this ID.
-       this->parent_->stop_waiting(message.id); 
-       return;
-    }
-    //--- END FIX part 1
+    //    // IMPORTANT: We must still tell the parent we are done waiting, 
+    //    // otherwise it might get stuck waiting for this ID.
+    //    this->parent_->stop_waiting(message.id); 
+    //    return;
+    // }
+    // //--- END FIX part 1
 
     
 
