@@ -11,6 +11,7 @@ static const char *const TAG = "duco";
 void Duco::setup() {
   // no setup needed
 }
+
 void Duco::loop() {
   const uint32_t now = millis();
 
@@ -55,7 +56,7 @@ bool Duco::parse_byte_(uint8_t byte) {
 
   if (at >= 2 && this->rx_buffer_[at - 1] == 0xAA && this->rx_buffer_[at] == 0x01 && !this->removed_last_) {
     // The last byte was 0xAA, but the current one is 0x01, which means we ignore it (only once!)
-    // This is an edge case in processing, likely to prevent accidentally introducing AA:55 in a message
+    // This is an edge case to prevent accidentally introducing AA:55 in a message
     this->rx_buffer_.pop_back();
     this->removed_last_ = true;
     return true;
@@ -86,10 +87,9 @@ void Duco::finalize_message_() {
   if (this->rx_buffer_.empty())
     return;
 
-  // ESP_LOGD(TAG, "Duco message received (%d bytes): %s",this->rx_buffer_.size(),format_hex_pretty(this->rx_buffer_).c_str());
-  
-  const uint8_t *raw = &this->rx_buffer_[0];
+  //ESP_LOGD(TAG, "Duco message received (%d bytes): %s", this->rx_buffer_.size(), format_hex_pretty(this->rx_buffer_).c_str());
 
+  const uint8_t *raw = &this->rx_buffer_[0];
   uint8_t data_len = raw[0];
 
   // Byte data_offset+len+1: CRC_HI (over all bytes)
@@ -108,15 +108,12 @@ void Duco::finalize_message_() {
   message.function = this->rx_buffer_[1];
   message.id = this->rx_buffer_[2];
   message.data.insert(message.data.end(), this->rx_buffer_.begin() + 3, this->rx_buffer_.begin() + data_len + 1);
-  // ESP_LOGD(TAG, "Parsed message: function=0x%02X id=0x%02X data=%s",message.function,message.id,format_hex_pretty(message.data).c_str());
+  //ESP_LOGD(TAG, "Parsed message: function=0x%02X id=0x%02X data=%s", message.function, message.id, format_hex_pretty(message.data).c_str());
 
   // see if a component is waiting for a response
   auto it = waiting_for_response.find(message.id);
   if (it != waiting_for_response.end()) {
-    // ESP_LOGD(TAG, "Delivering response id=0x%02X to waiting device", message.id);
     waiting_for_response[message.id]->receive_response(message);
-  } else {
-    // ESP_LOGD(TAG, "No waiting device for response id=0x%02X", message.id);
   }
 }
 
@@ -141,7 +138,6 @@ uint8_t Duco::next_id_() {
 
 void Duco::stop_waiting(uint8_t message_id) {
   auto it = waiting_for_response.find(message_id);
-
   if (it != waiting_for_response.end()) {
     waiting_for_response.erase(it);
   }
@@ -156,7 +152,7 @@ void Duco::send(DucoMessage message, DucoDevice *device) {
   this->flush();
 
   this->waiting_for_response[message.id] = device;
-  // ESP_LOGD(TAG, "Duco message sent: %s", message.to_string().c_str());
+  //ESP_LOGD(TAG, "Duco message sent: %s", message.to_string().c_str());
 }
 
 void Duco::debug_hex_(std::vector<uint8_t> bytes, uint8_t separator) {
@@ -164,7 +160,6 @@ void Duco::debug_hex_(std::vector<uint8_t> bytes, uint8_t separator) {
   res += "DUCO msg: ";
 
   size_t len = bytes.size();
-
   char buf[5];
 
   for (size_t i = 0; i < len; i++) {
@@ -179,40 +174,32 @@ void Duco::debug_hex_(std::vector<uint8_t> bytes, uint8_t separator) {
 }
 
 const std::string DucoDiscovery::NODE_TYPE_UCBAT = "UCBAT";
-const std::string DucoDiscovery::NODE_TYPE_UC = "UC";
-const std::string DucoDiscovery::NODE_TYPE_UCRH = "UCRH";
+const std::string DucoDiscovery::NODE_TYPE_UC    = "UC";
+const std::string DucoDiscovery::NODE_TYPE_UCRH  = "UCRH";
 const std::string DucoDiscovery::NODE_TYPE_UCCO2 = "UCCO2";
-const std::string DucoDiscovery::NODE_TYPE_VLV = "VLV";
-const std::string DucoDiscovery::NODE_TYPE_BOX = "BOX";
-const std::string DucoDiscovery::NODE_TYPE_SWITCH = "SWITCH";
+const std::string DucoDiscovery::NODE_TYPE_VLV   = "VLV";
+const std::string DucoDiscovery::NODE_TYPE_BOX   = "BOX";
+const std::string DucoDiscovery::NODE_TYPE_SWITCH= "SWITCH";
 const std::string DucoDiscovery::NODE_TYPE_UNKNOWN = "UNKNOWN";
 
 std::string friendly_node_type(uint8_t type_code) {
   switch (type_code) {
-    case DucoDiscovery::NODE_TYPE_CODE_UCBAT:
-      return DucoDiscovery::NODE_TYPE_UCBAT;
-    case DucoDiscovery::NODE_TYPE_CODE_UC:
-      return DucoDiscovery::NODE_TYPE_UC;
-    case DucoDiscovery::NODE_TYPE_CODE_UCRH:
-      return DucoDiscovery::NODE_TYPE_UCRH;
-    case DucoDiscovery::NODE_TYPE_CODE_UCCO2:
-      return DucoDiscovery::NODE_TYPE_UCCO2;
-    case DucoDiscovery::NODE_TYPE_CODE_VLV:
-      return DucoDiscovery::NODE_TYPE_VLV;
-    case DucoDiscovery::NODE_TYPE_CODE_BOX:
-      return DucoDiscovery::NODE_TYPE_BOX;
-    case DucoDiscovery::NODE_TYPE_CODE_SWITCH:
-      return DucoDiscovery::NODE_TYPE_SWITCH;
-    default:
-      return DucoDiscovery::NODE_TYPE_UNKNOWN;
+    case DucoDiscovery::NODE_TYPE_CODE_UCBAT: return DucoDiscovery::NODE_TYPE_UCBAT;
+    case DucoDiscovery::NODE_TYPE_CODE_UC: return DucoDiscovery::NODE_TYPE_UC;
+    case DucoDiscovery::NODE_TYPE_CODE_UCRH: return DucoDiscovery::NODE_TYPE_UCRH;
+    case DucoDiscovery::NODE_TYPE_CODE_UCCO2: return DucoDiscovery::NODE_TYPE_UCCO2;
+    case DucoDiscovery::NODE_TYPE_CODE_VLV: return DucoDiscovery::NODE_TYPE_VLV;
+    case DucoDiscovery::NODE_TYPE_CODE_BOX: return DucoDiscovery::NODE_TYPE_BOX;
+    case DucoDiscovery::NODE_TYPE_CODE_SWITCH: return DucoDiscovery::NODE_TYPE_SWITCH;
+    default: return DucoDiscovery::NODE_TYPE_UNKNOWN;
   }
 }
 
 void DucoDiscovery::update() {
-  // display all found nodes
   ESP_LOGI(TAG, "Discovered nodes:");
   for (auto &node : nodes_) {
-    ESP_LOGI(TAG, "  Node %d: type %d (%s)", std::get<0>(node), std::get<1>(node),
+    ESP_LOGI(TAG, "  Node %d: type %d (%s)",
+             std::get<0>(node), std::get<1>(node),
              friendly_node_type(std::get<1>(node)).c_str());
   }
 }
@@ -227,13 +214,10 @@ void DucoDiscovery::loop() {
     return;
   }
   if (!waiting_for_response_) {
-    ESP_LOGD(TAG, "Discover next node (%d = 0x%02x)", next_node_, next_node_);
-    // request the next node
     DucoMessage message;
     message.function = 0x0c;
     message.data = {0x01, next_node_};
     this->parent_->send(message, this);
-
     waiting_for_response_ = true;
   }
 }
@@ -241,15 +225,11 @@ void DucoDiscovery::loop() {
 void DucoDiscovery::receive_response(const DucoMessage &message) {
   if (message.function == 0x0e) {
     this->parent_->stop_waiting(message.id);
-
     if (message.data[0] != 0x00) {
-      // node was found, store its information
       nodes_.emplace_back(next_node_, message.data[0]);
     }
-
     next_node_++;
     waiting_for_response_ = false;
-    // delay execution for 100 loops
     delay_ = 100;
   }
 }
@@ -267,17 +247,17 @@ void DucoTime::update() {
 
     DucoMessage message;
     message.function = 0x24;
-
-    message.data = {0x05,
-                    static_cast<uint8_t>(now.timestamp & 0xff),
-                    static_cast<uint8_t>((now.timestamp >> 8) & 0xff),
-                    static_cast<uint8_t>((now.timestamp >> 16) & 0xff),
-                    static_cast<uint8_t>((now.timestamp >> 24) & 0xff),
-                    0x00,
-                    0x00,
-                    0x00,
-                    0x00};
-
+    message.data = {
+      0x05,
+      static_cast<uint8_t>(now.timestamp & 0xff),
+      static_cast<uint8_t>((now.timestamp >> 8) & 0xff),
+      static_cast<uint8_t>((now.timestamp >> 16) & 0xff),
+      static_cast<uint8_t>((now.timestamp >> 24) & 0xff),
+      0x00,
+      0x00,
+      0x00,
+      0x00
+    };
     this->parent_->send(message, this);
   }
 }
