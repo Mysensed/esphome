@@ -80,6 +80,31 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
       }
     }
 
+    //--- DEBUG LOGS  ---
+    // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0x53 | Val: 751 | Raw: [01 04 F2 00 EF 02 00 00]
+    // duco_esp32_v3: [W][DEBUG:077]: [MIRRORING] Current Sensor Addr: 0x02 | Msg ID: 0xD4 | Val: 442 | Raw: [00 04 CA 00 BA 01 00 00]
+    // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xF3 | Val: 760 | Raw: [01 04 F2 00 F8 02 00 00]
+    // duco_esp32_v3: [W][DEBUG:077]: [MIRRORING] Current Sensor Addr: 0x02 | Msg ID: 0x71 | Val: 440 | Raw: [00 04 CA 00 B8 01 00 00]
+    // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xB1 | Val: 759 | Raw: [01 04 F2 00 F7 02 00 00]
+
+
+    //--- FIX part 1, ignore corrupt values
+    // CHECK SOURCE ADDRESS (we have seen forwarded packages)
+    // The first byte of the data is the Node ID.
+    uint8_t source_node = message.data[0];
+    // If this packet belongs to someone else, IGNORE it.
+    if (source_node != this->address_) {
+       ESP_LOGW("DEBUG", "Ignored packet for Node 0x%02X (I am 0x%02X)", source_node, this->address_);
+       
+       // IMPORTANT: We must still tell the parent we are done waiting, 
+       // otherwise it might get stuck waiting for this ID.
+       this->parent_->stop_waiting(message.id); 
+       return;
+    }
+    //--- END FIX part 1
+
+    
+
     // Update history
     this->last_value_ = co2_value;
     global_last_value = co2_value;
