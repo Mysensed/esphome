@@ -227,7 +227,7 @@ void DucoDiscovery::loop() {
     return;
   }
   if (!waiting_for_response_) {
-    ESP_LOGD(TAG, "Discover next node (%d = 0x%02x)", next_node_, next_node_);
+    // ESP_LOGD(TAG, "Discover next node (%d = 0x%02x)", next_node_, next_node_);
     // request the next node
     DucoMessage message;
     message.function = 0x0c;
