@@ -87,6 +87,12 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
     // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xF3 | Val: 760 | Raw: [01 04 F2 00 F8 02 00 00]
     // duco_esp32_v3: [W][DEBUG:077]: [MIRRORING] Current Sensor Addr: 0x02 | Msg ID: 0x71 | Val: 440 | Raw: [00 04 CA 00 B8 01 00 00]
     // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xB1 | Val: 759 | Raw: [01 04 F2 00 F7 02 00 00]
+    // ----------------------
+    // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xA7 | Val: 737 | Raw: [01 04 F1 00 E1 02 00 00]
+    // duco_esp32_v3: [W][DEBUG:067]: [CROSS-TALK JUMP] Sensor Addr: 0x02 | Msg ID: 0x84 | Val: 430 | Raw: [00 04 CC 00 AE 01 00 00]
+    // duco_esp32_v3: [W][DEBUG:077]: [MIRRORING] Current Sensor Addr: 0x02 | Msg ID: 0x84 | Val: 430 | Raw: [00 04 CC 00 AE 01 00 00]
+    // duco_esp32_v3: [W][DEBUG:077]: [MIRRORING] Current Sensor Addr: 0x02 | Msg ID: 0x42 | Val: 427 | Raw: [00 04 CC 00 AB 01 00 00]
+    // duco_esp32_v3: [W][DEBUG:067]: [SUDDEN JUMP] Sensor Addr: 0x02 | Msg ID: 0xA1 | Val: 746 | Raw: [01 04 F2 00 EA 02 00 00]
     // //--- END DEBUG  ---
 
     //--- FIX part 1, ignore corrupt values
