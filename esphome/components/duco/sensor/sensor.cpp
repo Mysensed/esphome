@@ -1,5 +1,4 @@
 #include "sensor.h"
-#include "duco.h"
 #include "esphome/core/log.h"
 
 namespace esphome {
@@ -51,3 +50,70 @@ void DucoCo2Sensor::receive_response(const DucoMessage &message) {
       this->address_,
       message.id
     );
+
+    // IMPORTANT: always stop waiting to avoid stalling the bus
+    this->parent_->stop_waiting(message.id);
+    return;
+  }
+
+  // DUCO CO2 value is little-endian in bytes 4+5
+  uint16_t value = (message.data[5] << 8) | message.data[4];
+  uint32_t now = millis();
+
+  // ------------------------------------------------------------------
+  // Optional debug: sudden jumps (per-sensor)
+  // ------------------------------------------------------------------
+  if (this->last_value_ != 0) {
+    uint16_t diff = abs((int)value - (int)this->last_value_);
+    if (diff > 300 && (now - this->last_jump_log_at_) > 10000) {
+      ESP_LOGW(TAG,
+        "[SUDDEN JUMP] Sensor 0x%02X | Old: %u | New: %u | Raw: [%02X %02X %02X %02X %02X %02X %02X %02X]",
+        this->address_,
+        this->last_value_,
+        value,
+        message.data[0], message.data[1], message.data[2], message.data[3],
+        message.data[4], message.data[5], message.data[6], message.data[7]
+      );
+      this->last_jump_log_at_ = now;
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Optional debug: mirrored values between sensors
+  // ------------------------------------------------------------------
+  if (value == global_last_value &&
+      this->address_ != global_last_sensor_id &&
+      (now - last_dup_log_at_) > 10000) {
+
+    ESP_LOGW(TAG,
+      "[MIRRORING] Sensor 0x%02X mirrors sensor 0x%02X | Value: %u",
+      this->address_,
+      global_last_sensor_id,
+      value
+    );
+    last_dup_log_at_ = now;
+  }
+
+  // ------------------------------------------------------------------
+  // Publish value (sanity bounds)
+  // ------------------------------------------------------------------
+  this->last_value_ = value;
+  global_last_value = value;
+  global_last_sensor_id = this->address_;
+
+  if (value >= 300 && value <= 10000) {
+    this->publish_state(value);
+  } else {
+    ESP_LOGW(TAG,
+      "[OUT OF RANGE] Sensor 0x%02X reported %u ppm",
+      this->address_,
+      value
+    );
+  }
+
+  // Always stop waiting after handling response
+  this->parent_->stop_waiting(message.id);
+}
+
+}  // namespace duco
+}  // namespace esphome
