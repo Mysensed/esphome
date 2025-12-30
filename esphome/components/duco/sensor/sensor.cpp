@@ -23,19 +23,7 @@ float DucoCo2Sensor::get_setup_priority() const {
 
 void DucoCo2Sensor::receive_response(const DucoMessage &message) {
   if (message.function == 0x12) {
-    // ---- ADD THIS DEBUG LINE ----
-    ESP_LOGD("duco_co2", "CO2 message received: id=0x%X data[0..7]=%02X.%02X.%02X.%02X.%02X.%02X.%02X.%02X",
-             message.id,
-             message.data.size() > 0 ? message.data[0] : 0,
-             message.data.size() > 1 ? message.data[1] : 0,
-             message.data.size() > 2 ? message.data[2] : 0,
-             message.data.size() > 3 ? message.data[3] : 0,
-             message.data.size() > 4 ? message.data[4] : 0,
-             message.data.size() > 5 ? message.data[5] : 0,
-             message.data.size() > 6 ? message.data[6] : 0,
-             message.data.size() > 7 ? message.data[7] : 0
-    );
-    // ------------------------------
+    
     uint16_t co2_value = (message.data[5] << 8) + message.data[4];
     // only publish the state if the co2 value is below 10000 or above 300
     // otherwise the value is likely invalid
